@@ -11,6 +11,9 @@ const execute_python = require("./execute_python");
 const execute_java = require("./execute_java");
 const execute_javascript = require("./execute_javascript");
 
+const { GoogleGenAI } = require("@google/genai");
+const ai = new GoogleGenAI({ apiKey: process.env.AI });
+
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
@@ -413,3 +416,37 @@ app.post("/synccode",async(req,res) => {
     res.status(500).send('Server error');
   }
 });
+
+app.post('/ai', [
+        body('prompt').notEmpty().withMessage('Prompt cannot be empty')
+    ],async(req,res) => {
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+    
+    let contents = "";
+    if(req.body.code) {
+      contents = "User has provided the following code \n"+req.body.code;
+    }
+    else {
+      contents = "User did not provide any code.";
+    }
+    contents+="\n Users query: "+req.body.prompt;
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: contents,
+            config: {
+              systemInstruction: `You are a code assistant. If code is provided, analyze it. The programming language is ${req.body.language || "unspecified"}. Answer the user's query. If the user asks something unrelated to the code or language, follow the user's intent anyway.`
+            },
+        });
+
+        res.status(200).send({ response: response.candidates[0].content.parts[0].text });
+    } catch (error) {
+        console.log(new Date().toLocaleString([], { hour12: false }) + " : " + error);
+        res.status(500).send({response:"Something's wrong on our side. Please try again."});
+    }
+})
