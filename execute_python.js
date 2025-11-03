@@ -14,7 +14,7 @@ const execute_python = async (code, input) => {
         Tty: true
       });
     
-      container.start().catch(err => reject(err));
+      await container.start();
     
       return new Promise((resolve, reject) => {
         container.attach({ stream: true, stdout: true, stderr: true }, async (err, stream) => {

@@ -30,6 +30,15 @@ const userSchema = new mongoose.Schema({
       language: { type: String },
     },
   ],
+  execution_history: [
+    {
+      filename: { type: String },
+      code: { type: String },
+      language: { type: String },
+      output: {type: String},
+      date: {type: Date}
+    },
+  ],
 });
 const User = mongoose.model("User", userSchema);
 
@@ -224,6 +233,31 @@ app.post("/submitcode", async (req, res) => {
     console.log(error);
     res.status(500).send("Internal Server Error");
   }
+
+  const token = req.header('auth-token');
+  if(token){
+      try {
+          const data = jwt.verify(token,JWT_SECRET);
+          const userId = data.user.id;
+
+          try {
+              const user = await User.findById(userId);
+
+              if (!user) {
+                throw new Error("User not found");
+              }
+              user.execution_history.push({ filename, code, language, output : response.ans, date: Date.now() });
+              await user.save();
+          } catch (error) {
+              console.error('Error saving code:', error);
+              res.status(500).json({ error: 'Internal server error' });
+          }
+      } catch (error) {
+          console.log(new Date().toLocaleString([], { hour12: false })+" : JWT verification failed");
+          res.status(401).send({error : "Invalid token"});
+      }
+  }
+
   res.send(response);
 });
 
