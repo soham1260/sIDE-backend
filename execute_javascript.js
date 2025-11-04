@@ -1,10 +1,5 @@
-require('dotenv').config();
-const Docker = require('dockerode');
-const docker = new Docker({host: process.env.VM_IP, port: process.env.VM_PORT});
-
-const execute_js = async (code, input) => {
+const execute_js = async (docker, code, input) => {
     const escapedCode = code.replace(/"/g, '\\"');
-    console.log(code);
     try {
         const container = await docker.createContainer({
           Image: 'node:latest',

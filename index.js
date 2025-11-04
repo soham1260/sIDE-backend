@@ -11,6 +11,19 @@ const execute_python = require("./execute_python");
 const execute_java = require("./execute_java");
 const execute_javascript = require("./execute_javascript");
 
+const Docker = require('dockerode');
+let docker;
+if (process.env.VM_IP && process.env.VM_PORT) {
+  docker = new Docker({
+    host: process.env.VM_IP,
+    port: process.env.VM_PORT,
+  });
+  console.log(`Connected to remote Docker: ${process.env.VM_IP}:${process.env.VM_PORT}`);
+} else {
+  docker = new Docker();
+  console.log('Using local Docker socket');
+}
+
 const { GoogleGenAI } = require("@google/genai");
 const ai = new GoogleGenAI({ apiKey: process.env.AI });
 
@@ -212,19 +225,19 @@ app.post("/submitcode", async (req, res) => {
   try {
     switch (language) {
       case "c":
-        response = await execute_c(code, input);
+        response = await execute_c(docker, code, input);
         break;
       case "cpp":
-        response = await execute_cpp(code, input);
+        response = await execute_cpp(docker, code, input);
         break;
       case "python":
-        response = await execute_python(code, input);
+        response = await execute_python(docker, code, input);
         break;
       case "java":
-        response = await execute_java(code, input, filename);
+        response = await execute_java(docker, code, input, filename);
         break;
       case "javascript":
-        response = await execute_javascript(code, input);
+        response = await execute_javascript(docker, code, input);
         break;
       default:
         res.status(500).json({ error: "Unexpected Input" });
