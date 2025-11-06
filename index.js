@@ -497,3 +497,13 @@ app.post('/ai', [
         res.status(500).send({response:"Something's wrong on our side. Please try again."});
     }
 })
+
+app.get("/fetchuserexecutionhistory",fetchuser,async(req,res) => {
+  try {
+    const user = await User.findById(req.user.id, 'execution_history.filename execution_history.code execution_history.language execution_history._id');
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
