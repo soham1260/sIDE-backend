@@ -5,11 +5,11 @@ mongoose.connect(process.env.DB);
 const { v4: uuidv4 } = require('uuid');
 const app = express();
 const cors = require("cors");
-const execute_c = require("./execute_c");
-const execute_cpp = require("./execute_cpp");
-const execute_python = require("./execute_python");
-const execute_java = require("./execute_java");
-const execute_javascript = require("./execute_javascript");
+const execute_c = require("./execution_scripts/execute_c");
+const execute_cpp = require("./execution_scripts/execute_cpp");
+const execute_python = require("./execution_scripts/execute_python");
+const execute_java = require("./execution_scripts/execute_java");
+const execute_javascript = require("./execution_scripts/execute_javascript");
 
 const Docker = require('dockerode');
 let docker;
