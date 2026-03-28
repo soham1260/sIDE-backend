@@ -3,7 +3,7 @@ const execute_java = async (docker, code, input, filename) => {
     
     try {
       const container = await docker.createContainer({
-        Image: 'openjdk',
+        Image: 'eclipse-temurin:21',
         Cmd: ['/bin/bash', '-c', `echo "${escapedCode}" > ${filename}.java && javac ${filename}.java && timeout 5 java ${filename} <<< "${input}"`],
         AttachStdout: true,
         AttachStderr: true,

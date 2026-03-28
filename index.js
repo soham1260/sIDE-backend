@@ -244,7 +244,7 @@ app.post("/submitcode", async (req, res) => {
     }
   } catch (error) {
     console.log(error);
-    res.status(500).send("Internal Server Error");
+    return res.status(500).send("Internal Server Error");
   }
 
   const token = req.header('auth-token');
@@ -263,15 +263,15 @@ app.post("/submitcode", async (req, res) => {
               await user.save();
           } catch (error) {
               console.error('Error saving code:', error);
-              res.status(500).json({ error: 'Internal server error' });
+              return res.status(500).json({ error: `Internal server error: ${error}` });
           }
       } catch (error) {
           console.log(new Date().toLocaleString([], { hour12: false })+" : JWT verification failed");
-          res.status(401).send({error : "Invalid token"});
+          return res.status(401).send({error : "Invalid token"});
       }
   }
 
-  res.send(response);
+  return res.send(response);
 });
 
 app.listen(process.env.PORT, () => {
@@ -484,7 +484,7 @@ app.post('/ai', [
     
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: contents,
             config: {
               systemInstruction: `You are a code assistant. If code is provided, analyze it. The programming language is ${req.body.language || "unspecified"}. Answer the user's query. If the user asks something unrelated to the code or language, follow the user's intent anyway.`
