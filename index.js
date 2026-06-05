@@ -48,8 +48,8 @@ const userSchema = new mongoose.Schema({
       filename: { type: String },
       code: { type: String },
       language: { type: String },
-      output: {type: String},
-      date: {type: Date}
+      output: { type: String },
+      date: { type: Date }
     },
   ],
 });
@@ -57,12 +57,12 @@ const User = mongoose.model("User", userSchema);
 
 const tempCodeSchema = new mongoose.Schema({
   code: {
-      type: String,
-      required: true
+    type: String,
+    required: true
   },
   expiresAt: {
-      type: Date,
-      required: true
+    type: Date,
+    required: true
   },
   // user: {
   //   type: mongoose.Schema.Types.ObjectId,
@@ -116,9 +116,9 @@ app.post(
         const authtoken = jwt.sign(data, JWT_SECRET);
         console.log(
           new Date().toLocaleString([], { hour12: false }) +
-            " : " +
-            email +
-            " logged in"
+          " : " +
+          email +
+          " logged in"
         );
         res.json({ success: true, authtoken });
       })
@@ -126,10 +126,10 @@ app.post(
         if (error.message === "Invalid email or password") {
           console.log(
             new Date().toLocaleString([], { hour12: false }) +
-              " : " +
-              error.message +
-              " " +
-              email
+            " : " +
+            error.message +
+            " " +
+            email
           );
           res.status(400).json({
             success: false,
@@ -138,8 +138,8 @@ app.post(
         } else {
           console.log(
             new Date().toLocaleString([], { hour12: false }) +
-              " : " +
-              error.message
+            " : " +
+            error.message
           );
           res.status(500).send("Internal Server Error");
         }
@@ -188,9 +188,9 @@ app.post(
         success = true;
         console.log(
           new Date().toLocaleString([], { hour12: false }) +
-            " : New user" +
-            user.email +
-            " signed in"
+          " : New user" +
+          user.email +
+          " signed in"
         );
         res.json({ success, authtoken });
       })
@@ -201,8 +201,8 @@ app.post(
         } else {
           console.log(
             new Date().toLocaleString([], { hour12: false }) +
-              " : " +
-              error.message
+            " : " +
+            error.message
           );
           res.status(500).send("Internal Server Error");
         }
@@ -248,27 +248,27 @@ app.post("/submitcode", async (req, res) => {
   }
 
   const token = req.header('auth-token');
-  if(token){
+  if (token) {
+    try {
+      const data = jwt.verify(token, JWT_SECRET);
+      const userId = data.user.id;
+
       try {
-          const data = jwt.verify(token,JWT_SECRET);
-          const userId = data.user.id;
+        const user = await User.findById(userId);
 
-          try {
-              const user = await User.findById(userId);
-
-              if (!user) {
-                throw new Error("User not found");
-              }
-              user.execution_history.push({ filename, code, language, output : response.ans, date: Date.now() });
-              await user.save();
-          } catch (error) {
-              console.error('Error saving code:', error);
-              return res.status(500).json({ error: `Internal server error: ${error}` });
-          }
+        if (!user) {
+          throw new Error("User not found");
+        }
+        user.execution_history.push({ filename, code, language, output: response.ans, date: Date.now() });
+        await user.save();
       } catch (error) {
-          console.log(new Date().toLocaleString([], { hour12: false })+" : JWT verification failed");
-          return res.status(401).send({error : "Invalid token"});
+        console.error('Error saving code:', error);
+        return res.status(500).json({ error: `Internal server error: ${error}` });
       }
+    } catch (error) {
+      console.log(new Date().toLocaleString([], { hour12: false }) + " : JWT verification failed");
+      return res.status(401).send({ error: "Invalid token" });
+    }
   }
 
   return res.send(response);
@@ -278,24 +278,24 @@ app.listen(process.env.PORT, () => {
   console.log(`App listening at http://localhost:${process.env.PORT}`);
 });
 
-const fetchuser = (req,res,next ) => {
+const fetchuser = (req, res, next) => {
   const token = req.header('auth-token');
-  if(!token){
-      res.status(401).send({error : "Invalid token"});
+  if (!token) {
+    res.status(401).send({ error: "Invalid token" });
   }
 
   try {
-      const data = jwt.verify(token,JWT_SECRET);
-      req.user = data.user;
-      console.log(new Date().toLocaleString([], { hour12: false })+" : JWT verified user " + req.user.id);
-      next();
+    const data = jwt.verify(token, JWT_SECRET);
+    req.user = data.user;
+    console.log(new Date().toLocaleString([], { hour12: false }) + " : JWT verified user " + req.user.id);
+    next();
   } catch (error) {
-      console.log(new Date().toLocaleString([], { hour12: false })+" : JWT verification failed");
-      res.status(401).send({error : "Invalid token"});
+    console.log(new Date().toLocaleString([], { hour12: false }) + " : JWT verification failed");
+    res.status(401).send({ error: "Invalid token" });
   }
 }
 
-app.post("/checkfileexists",fetchuser,async (req,res) => {
+app.post("/checkfileexists", fetchuser, async (req, res) => {
   const { language, filename } = req.body;
   try {
     const user = await User.findOne({
@@ -320,34 +320,34 @@ app.post('/savefile', fetchuser, async (req, res) => {
   const userId = req.user.id;
 
   try {
-      const user = await User.findById(userId);
+    const user = await User.findById(userId);
 
-      if (!user) {
-          return res.status(404).json({ error: 'User not found' });
-      }
-
-      const existingCodeEntry = user.codes.findIndex(
-          (entry) => entry.filename === filename && entry.language === language
-      );
-
-      if (existingCodeEntry !== -1) {
-        user.codes[existingCodeEntry].code = code;
-    } else {
-        user.codes.push({ filename, code, language });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-      await user.save();
+    const existingCodeEntry = user.codes.findIndex(
+      (entry) => entry.filename === filename && entry.language === language
+    );
 
-      res.status(200).json({ message: 'Code saved successfully' });
+    if (existingCodeEntry !== -1) {
+      user.codes[existingCodeEntry].code = code;
+    } else {
+      user.codes.push({ filename, code, language });
+    }
+
+    await user.save();
+
+    res.status(200).json({ message: 'Code saved successfully' });
   } catch (error) {
-      console.error('Error saving code:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    console.error('Error saving code:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.get("/fetchuserdata",fetchuser,async(req,res) => {
+app.get("/fetchuserdata", fetchuser, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id, 'codes.filename codes.code codes.language codes._id');
+    const user = await User.findById(req.user.id, 'codes.filename codes.language codes._id');
     res.status(200).json(user);
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -355,13 +355,13 @@ app.get("/fetchuserdata",fetchuser,async(req,res) => {
   }
 });
 
-app.get("/fetchcode",fetchuser,async(req,res) => {
+app.get("/fetchcode", fetchuser, async (req, res) => {
   const { id } = req.query;
   try {
     const user = await User.findById(req.user.id);
-    
+
     const code = user.codes.find(code => code._id.toString() === id);
-    
+
     if (!code) {
       return res.status(200).json({ message: 'Code not found' });
     }
@@ -377,7 +377,7 @@ app.get("/fetchcode",fetchuser,async(req,res) => {
   }
 });
 
-app.get("/deletecode",fetchuser,async(req,res) => {
+app.get("/deletecode", fetchuser, async (req, res) => {
   const { id } = req.query;
 
   try {
@@ -392,7 +392,7 @@ app.get("/deletecode",fetchuser,async(req,res) => {
 
     await user.save();
 
-    const response = await User.findById(req.user.id, 'codes.filename codes.code codes.language codes._id');
+    const response = await User.findById(req.user.id, 'codes.filename codes.language codes._id');
 
     res.status(200).json(response);
   } catch (error) {
@@ -400,7 +400,7 @@ app.get("/deletecode",fetchuser,async(req,res) => {
   }
 });
 
-app.post("/sharecode",async(req,res) => {
+app.post("/sharecode", async (req, res) => {
 
   try {
     const { language, code, name } = req.body;
@@ -412,8 +412,8 @@ app.post("/sharecode",async(req,res) => {
     });
 
     const savedCode = await newTempCode.save();
-    
-    res.status(200).json({urlid : savedCode.uuid})
+
+    res.status(200).json({ urlid: savedCode.uuid })
   } catch (error) {
     res.status(500).send('Server error');
   }
@@ -422,15 +422,15 @@ app.post("/sharecode",async(req,res) => {
 
 app.get('/sharedcode/:uuid', async (req, res) => {
   try {
-    
+
     const sharedCode = await tempCode.findOne({ uuid: req.params.uuid });//.populate('user')
 
     if (!sharedCode) {
-      return res.status(404).send({message : 'Code not found or expired'});
+      return res.status(404).send({ message: 'Code not found or expired' });
     }
 
     res.json({
-      language:sharedCode.language,
+      language: sharedCode.language,
       code: sharedCode.code,
       name: sharedCode.name
       // user: sharedCode.user.name
@@ -440,7 +440,7 @@ app.get('/sharedcode/:uuid', async (req, res) => {
   }
 });
 
-app.post("/synccode",async(req,res) => {
+app.post("/synccode", async (req, res) => {
   const { language, code, id } = req.body;
   try {
     const updatedCode = await tempCode.findOneAndUpdate(
@@ -459,46 +459,46 @@ app.post("/synccode",async(req,res) => {
     }
   } catch (error) {
     console.log(error);
-    
+
     res.status(500).send('Server error');
   }
 });
 
 app.post('/ai', [
-        body('prompt').notEmpty().withMessage('Prompt cannot be empty')
-    ],async(req,res) => {
-    
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-    }
-    
-    let contents = "";
-    if(req.body.code) {
-      contents = "User has provided the following code \n"+req.body.code;
-    }
-    else {
-      contents = "User did not provide any code.";
-    }
-    contents+="\n Users query: "+req.body.prompt;
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: contents,
-            config: {
-              systemInstruction: `You are a code assistant. If code is provided, analyze it. The programming language is ${req.body.language || "unspecified"}. Answer the user's query. If the user asks something unrelated to the code or language, follow the user's intent anyway.`
-            },
-        });
+  body('prompt').notEmpty().withMessage('Prompt cannot be empty')
+], async (req, res) => {
 
-        res.status(200).send({ response: response.candidates[0].content.parts[0].text });
-    } catch (error) {
-        console.log(new Date().toLocaleString([], { hour12: false }) + " : " + error);
-        res.status(500).send({response:"Something's wrong on our side. Please try again."});
-    }
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  let contents = "";
+  if (req.body.code) {
+    contents = "User has provided the following code \n" + req.body.code;
+  }
+  else {
+    contents = "User did not provide any code.";
+  }
+  contents += "\n Users query: " + req.body.prompt;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: contents,
+      config: {
+        systemInstruction: `You are a code assistant. If code is provided, analyze it. The programming language is ${req.body.language || "unspecified"}. Answer the user's query. If the user asks something unrelated to the code or language, follow the user's intent anyway.`
+      },
+    });
+
+    res.status(200).send({ response: response.candidates[0].content.parts[0].text });
+  } catch (error) {
+    console.log(new Date().toLocaleString([], { hour12: false }) + " : " + error);
+    res.status(500).send({ response: "Something's wrong on our side. Please try again." });
+  }
 })
 
-app.get("/fetchuserexecutionhistory",fetchuser,async(req,res) => {
+app.get("/fetchuserexecutionhistory", fetchuser, async (req, res) => {
   try {
     const user = await User.findById(req.user.id, 'execution_history.filename execution_history.code execution_history.language execution_history._id');
     res.status(200).json(user);
