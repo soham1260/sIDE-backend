@@ -48,6 +48,7 @@ const userSchema = new mongoose.Schema({
       filename: { type: String },
       code: { type: String },
       language: { type: String },
+      input: { type: String },
       output: { type: String },
       date: { type: Date }
     },
@@ -259,7 +260,7 @@ app.post("/submitcode", async (req, res) => {
         if (!user) {
           throw new Error("User not found");
         }
-        user.execution_history.push({ filename, code, language, output: response.ans, date: Date.now() });
+        user.execution_history.push({ filename, code, language, input, output: response.ans, date: Date.now() });
         await user.save();
       } catch (error) {
         console.error('Error saving code:', error);
@@ -504,7 +505,7 @@ app.post('/ai', [
 
 app.get("/fetchuserexecutionhistory", fetchuser, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id, 'execution_history.filename execution_history.code execution_history.language execution_history._id');
+    const user = await User.findById(req.user.id, 'execution_history.filename execution_history.language execution_history._id');
     res.status(200).json(user);
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -527,10 +528,33 @@ app.get("/deleteexecutionhistory", fetchuser, async (req, res) => {
 
     await user.save();
 
-    const response = await User.findById(req.user.id, 'execution_history.filename execution_history.code execution_history.language execution_history._id');
+    const response = await User.findById(req.user.id, 'execution_history.filename execution_history.language execution_history._id');
 
     res.status(200).json(response);
   } catch (error) {
     res.status(500).send('Server error');
+  }
+});
+
+app.get("/fetchhistorydetail", fetchuser, async (req, res) => {
+  const { id } = req.query;
+  try {
+    const user = await User.findById(req.user.id);
+    const historyItem = user.execution_history.find(item => item._id.toString() === id);
+
+    if (!historyItem) {
+      return res.status(200).json({ message: 'History item not found' });
+    }
+
+    res.json({
+      language: historyItem.language,
+      code: historyItem.code,
+      filename: historyItem.filename,
+      input: historyItem.input || "",
+      output: historyItem.output || ""
+    });
+  } catch (error) {
+    console.error('Error fetching history detail:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
