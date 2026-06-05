@@ -360,7 +360,11 @@ app.get("/fetchcode", fetchuser, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
 
-    const code = user.codes.find(code => code._id.toString() === id);
+    let code = user.codes.find(code => code._id.toString() === id);
+
+    if (!code) {
+      code = user.execution_history.find(history => history._id.toString() === id);
+    }
 
     if (!code) {
       return res.status(200).json({ message: 'Code not found' });
@@ -505,5 +509,28 @@ app.get("/fetchuserexecutionhistory", fetchuser, async (req, res) => {
   } catch (error) {
     console.error('Error fetching user data:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get("/deleteexecutionhistory", fetchuser, async (req, res) => {
+  const { id } = req.query;
+
+  try {
+    const user = await User.findById(req.user.id);
+    const historyIndex = user.execution_history.findIndex(item => item._id.toString() === id);
+
+    if (historyIndex === -1) {
+      return res.status(404).json({ message: 'Unauthorized' });
+    }
+
+    user.execution_history.splice(historyIndex, 1);
+
+    await user.save();
+
+    const response = await User.findById(req.user.id, 'execution_history.filename execution_history.code execution_history.language execution_history._id');
+
+    res.status(200).json(response);
+  } catch (error) {
+    res.status(500).send('Server error');
   }
 });
