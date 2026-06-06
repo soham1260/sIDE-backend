@@ -5,24 +5,7 @@ mongoose.connect(process.env.DB);
 const { v4: uuidv4 } = require('uuid');
 const app = express();
 const cors = require("cors");
-const execute_c = require("./execution_scripts/execute_c");
-const execute_cpp = require("./execution_scripts/execute_cpp");
-const execute_python = require("./execution_scripts/execute_python");
-const execute_java = require("./execution_scripts/execute_java");
-const execute_javascript = require("./execution_scripts/execute_javascript");
-
-const Docker = require('dockerode');
-let docker;
-if (process.env.VM_IP && process.env.VM_PORT) {
-  docker = new Docker({
-    host: process.env.VM_IP,
-    port: process.env.VM_PORT,
-  });
-  console.log(`Connected to remote Docker: ${process.env.VM_IP}:${process.env.VM_PORT}`);
-} else {
-  docker = new Docker();
-  console.log('Using local Docker socket');
-}
+const { codeExecutionQueue } = require("./queue");
 
 const { GoogleGenAI } = require("@google/genai");
 const ai = new GoogleGenAI({ apiKey: process.env.AI });
@@ -221,58 +204,51 @@ app.get("/hello", (req, res) => {
 
 app.post("/submitcode", async (req, res) => {
   const { code, input, language, filename } = req.body;
-  let response;
-
-  try {
-    switch (language) {
-      case "c":
-        response = await execute_c(docker, code, input);
-        break;
-      case "cpp":
-        response = await execute_cpp(docker, code, input);
-        break;
-      case "python":
-        response = await execute_python(docker, code, input);
-        break;
-      case "java":
-        response = await execute_java(docker, code, input, filename);
-        break;
-      case "javascript":
-        response = await execute_javascript(docker, code, input);
-        break;
-      default:
-        res.status(500).json({ error: "Unexpected Input" });
-    }
-  } catch (error) {
-    console.log(error);
-    return res.status(500).send("Internal Server Error");
-  }
+  let userId = null;
 
   const token = req.header('auth-token');
   if (token) {
     try {
       const data = jwt.verify(token, JWT_SECRET);
-      const userId = data.user.id;
-
-      try {
-        const user = await User.findById(userId);
-
-        if (!user) {
-          throw new Error("User not found");
-        }
-        user.execution_history.push({ filename, code, language, input, output: response.ans, date: Date.now() });
-        await user.save();
-      } catch (error) {
-        console.error('Error saving code:', error);
-        return res.status(500).json({ error: `Internal server error: ${error}` });
-      }
+      userId = data.user.id;
     } catch (error) {
       console.log(new Date().toLocaleString([], { hour12: false }) + " : JWT verification failed");
       return res.status(401).send({ error: "Invalid token" });
     }
   }
 
-  return res.send(response);
+  try {
+    const job = await codeExecutionQueue.add("execute", { code, input, language, filename, userId });
+    return res.status(202).json({ success: true, jobId: job.id });
+  } catch (error) {
+    console.error("Error adding job to queue:", error);
+    return res.status(500).json({ error: "Internal server error: failed to queue execution" });
+  }
+});
+
+app.get("/job/:id", async (req, res) => {
+  try {
+    const job = await codeExecutionQueue.getJob(req.params.id);
+    if (!job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    const state = await job.getState(); // waiting,active,completed,failed
+    res.json({
+      id: job.id,
+      state,
+      result: job.returnvalue,
+      failedReason: job.failedReason
+    });
+
+    if (state === 'completed' || state === 'failed') {
+      await job.remove();
+    }
+
+  } catch (error) {
+    console.error("Error checking job status:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 app.listen(process.env.PORT, () => {
