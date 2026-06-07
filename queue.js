@@ -1,3 +1,4 @@
+require("dotenv").config();
 const { Queue, Worker } = require("bullmq");
 const IORedis = require("ioredis");
 const mongoose = require("mongoose");
@@ -8,6 +9,12 @@ const execute_cpp = require("./execution_scripts/execute_cpp");
 const execute_python = require("./execution_scripts/execute_python");
 const execute_java = require("./execution_scripts/execute_java");
 const execute_javascript = require("./execution_scripts/execute_javascript");
+
+if (mongoose.connection.readyState === 0) {
+  mongoose.connect(process.env.DB)
+    .then(() => console.log("Worker connected to MongoDB"))
+    .catch((err) => console.error("Worker MongoDB connection error:", err));
+}
 
 let docker;
 if (process.env.VM_IP && process.env.VM_PORT) {
@@ -26,6 +33,30 @@ const connection = new IORedis(process.env.REDIS_URL, {
 });
 
 const codeExecutionQueue = new Queue("code-execution", { connection });
+
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  password: { type: String, required: true },
+  codes: [
+    {
+      filename: { type: String },
+      code: { type: String },
+      language: { type: String },
+    },
+  ],
+  execution_history: [
+    {
+      filename: { type: String },
+      code: { type: String },
+      language: { type: String },
+      input: { type: String },
+      output: { type: String },
+      date: { type: Date }
+    },
+  ],
+});
+const User = mongoose.model("User", userSchema);
 
 const worker = new Worker("code-execution", async (job) => {
   const { code, input, language, filename, userId } = job.data;
@@ -58,7 +89,6 @@ const worker = new Worker("code-execution", async (job) => {
 
   if (userId && response) {
     try {
-      const User = mongoose.model("User");
       const user = await User.findById(userId);
 
       if (user) {
@@ -71,10 +101,10 @@ const worker = new Worker("code-execution", async (job) => {
   }
 
   return response;
-}, { connection });
+}, { connection, concurrency: 5 });
 
 worker.on("failed", (job, err) => {
   console.error(`Job ${job ? job.id : 'unknown'} failed:`, err);
 });
 
-module.exports = { codeExecutionQueue };
+console.log("Execution Worker started and listening for jobs");

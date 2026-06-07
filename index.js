@@ -5,7 +5,14 @@ mongoose.connect(process.env.DB);
 const { v4: uuidv4 } = require('uuid');
 const app = express();
 const cors = require("cors");
-const { codeExecutionQueue } = require("./queue");
+const { Queue } = require("bullmq");
+const IORedis = require("ioredis");
+
+const connection = new IORedis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: null
+});
+
+const codeExecutionQueue = new Queue("code-execution", { connection });
 
 const { GoogleGenAI } = require("@google/genai");
 const ai = new GoogleGenAI({ apiKey: process.env.AI });
@@ -207,13 +214,12 @@ app.post("/submitcode", async (req, res) => {
   let userId = null;
 
   const token = req.header('auth-token');
-  if (token) {
+  if (token && token !== 'null' && token !== 'undefined') {
     try {
       const data = jwt.verify(token, JWT_SECRET);
       userId = data.user.id;
     } catch (error) {
       console.log(new Date().toLocaleString([], { hour12: false }) + " : JWT verification failed");
-      return res.status(401).send({ error: "Invalid token" });
     }
   }
 
@@ -228,12 +234,18 @@ app.post("/submitcode", async (req, res) => {
 
 app.get("/job/:id", async (req, res) => {
   try {
-    const job = await codeExecutionQueue.getJob(req.params.id);
+    let job = await codeExecutionQueue.getJob(req.params.id);
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
     }
 
     const state = await job.getState(); // waiting,active,completed,failed
+
+    if ((state === 'completed' || state === 'failed') && job.returnvalue === null) {
+      job = await codeExecutionQueue.getJob(req.params.id);
+    }
+
+    console.log(job.id + " " + state + " " + job.returnvalue);
     res.json({
       id: job.id,
       state,
