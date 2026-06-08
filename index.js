@@ -4,8 +4,24 @@ const mongoose = require("mongoose");
 mongoose.connect(process.env.DB);
 const { v4: uuidv4 } = require('uuid');
 const app = express();
+const http = require("http");
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.on('subscribe_job', (jobId) => {
+    socket.join(jobId);
+  });
+});
+
 const cors = require("cors");
-const { Queue } = require("bullmq");
+const { Queue, QueueEvents } = require("bullmq");
 const IORedis = require("ioredis");
 
 const connection = new IORedis(process.env.REDIS_URL, {
@@ -13,6 +29,7 @@ const connection = new IORedis(process.env.REDIS_URL, {
 });
 
 const codeExecutionQueue = new Queue("code-execution", { connection });
+const queueEvents = new QueueEvents("code-execution", { connection });
 
 const { GoogleGenAI } = require("@google/genai");
 const ai = new GoogleGenAI({ apiKey: process.env.AI });
@@ -263,7 +280,17 @@ app.get("/job/:id", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT, () => {
+queueEvents.on('completed', ({ jobId, returnvalue }) => {
+  io.to(jobId).emit('job_completed', { jobId, result: returnvalue, state: 'completed' });
+  io.in(jobId).socketsLeave(jobId);
+});
+
+queueEvents.on('failed', ({ jobId, failedReason }) => {
+  io.to(jobId).emit('job_failed', { jobId, failedReason, state: 'failed' });
+  io.in(jobId).socketsLeave(jobId);
+});
+
+server.listen(process.env.PORT, () => {
   console.log(`App listening at http://localhost:${process.env.PORT}`);
 });
 
